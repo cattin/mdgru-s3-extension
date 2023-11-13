@@ -1,0 +1,11 @@
+tensorflow-gpu==1.15
+dicom
+nibabel
+numpy
+scipy==1.1.0
+scikit-image
+scikit-learn
+git+https://github.com/spezold/mvloader.git
+visdom
+setproctitle
+boto3==1.22.2

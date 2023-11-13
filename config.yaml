@@ -1,0 +1,39 @@
+lakefs:
+  s3_endpoint: ""
+  access_key: ""
+  secret_key: ""
+  data_repository: "smsc-basel"
+  branch: 'main/'
+datasplit:
+  split: [70, 10, 20]
+  num_splits: 5
+  foldspath: "/tmp/folds"
+mdgru:
+  featurefiles: ["flair.nii.gz", "t1.nii.gz", "t1ce.nii.gz", "t2.nii.gz"]
+  maskfiles: ["seg.nii.gz"]
+  datapath: "/tmp/mdgru"
+  locationtraining: "training.json"
+  locationvalidation: "validation.json"
+  locationtesting: "test.json"
+  optionname: "test_mdgru"
+  modelname: "test_mdgru_docker"
+  w: [240, 240]
+  p: [0, 0]
+  windowsizetesting: [240, 240]
+  paddingtesting: [0, 0]
+  iterations: 50000
+  validate_each: 50001
+  save_each: 5000
+  nclasses: 5
+  num_threads: 8
+  gpu: 0
+  cache_path: "/tmp/s3_cache"
+  use_s3: true
+run:
+  container_name: "mdgru_s3"
+  docker_rootless: true
+  gpu_pool: [0]
+  detach_docker: true
+  cache_path: "/tmp/s3_cache"
+  cache_delete: true
+
