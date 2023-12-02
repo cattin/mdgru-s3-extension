@@ -1,3 +1,5 @@
+#!/bin/python3
+
 import os
 import stat
 import time
@@ -10,6 +12,24 @@ from omegaconf import DictConfig, ListConfig
 import docker
 from copy import deepcopy
 import numpy as np
+
+MDGRU_PARAMETER_DONT_LIST = ["save_validation_results",
+                             "correct_orientation",
+                             "whiten",
+                             "perform_one_hot_encoding",
+                             "validate_same",
+                             "use_tensorboard",
+                             "perform_full_image_validation",
+                             "save_validation_results"]
+
+MDGRU_PARAMETER_STORE_TRUE_LIST = ["use_pytorch",
+                                   "use_s3",
+                                   "nonthreaded",
+                                   "dice_autoweighted",
+                                   "dice_generalized",
+                                   "dice_cc"]
+
+
 
 
 class Job():
@@ -227,36 +247,52 @@ class DockerDispatcher():
                     self.gpu_free.append(job.gpu_id)
 
 
-def cfg_2_mdgru(cfg, parent=""):
-    parameter = []
-
-    if parent != "":
-        parent = "".join((parent, "."))
+def cfg_2_mdgru(cfg):
+    parameter_list = []
 
     for element in cfg:
-        if isinstance(cfg[element], DictConfig):
+        space = " "
+        # check if the element is a boolean
+        if str(cfg[element]).lower() == "true" or str(cfg[element]).lower() == "false":
+            if element in MDGRU_PARAMETER_DONT_LIST:
+                if str(cfg[element]).lower() == "false":
+                    parameter_list.append("".join(("--", "dont_", element)))
+                    continue
+                else:
+                    #parameter_list.append("".join(("--", element)))
+                    continue
+            elif element in MDGRU_PARAMETER_STORE_TRUE_LIST:
+                if str(cfg[element]).lower() == "false":
+                    continue
+                else:
+                    parameter_list.append("".join(("--", element)))
+                    continue
+            else:
+                 #if str(cfg[element]).lower() == "true":
+                 #    parameter_list.append("".join(("--", element)))
+                 #else:
+                  #   parameter_list.append("".join(("--", "no_", element)))
+                 #continue
+                #space = " "
+                if str(cfg[element]).lower() == "false":
+                    continue
+                else:
+                    cfg[element] = " "
 
-            parameter += cfg_2_mdgru(cfg[element], "".join((parent, element)))
+        if len(element) == 1:
+            dashes = "-"
         else:
-            if str(cfg[element]) == "True":
-                cfg[element] = ""
-            elif str(cfg[element]) == "False":
-                continue
-            if len(element) == 1:
-                dashes = "-"
-            else:
-                dashes = "--"
+            dashes = "--"
 
-            if isinstance(cfg[element], ListConfig):
-                str_list = [str(entry) for entry in cfg[element]]
-                values = " ".join(str_list)
-            else:
-                values = str(cfg[element])
+        if isinstance(cfg[element], ListConfig):
+            str_list = [str(entry) for entry in cfg[element]]
+            values = " ".join(str_list)
+        else:
+            values = str(cfg[element])
 
-            parameter.append("".join((parent, dashes, element, " ", values)))
-
-    return parameter
-
+        parameter_list.append("".join((dashes, element, space, values)))
+    print(parameter_list)
+    return parameter_list
 
 def build_docker_image(cfg) -> None:
 
@@ -358,10 +394,11 @@ def run(cfg: DictConfig, gpu_id, container_name) -> None:
     program_arguments = cfg_2_mdgru(cfg.mdgru)
     # arguments to access lakeFS
     lakefs_arguments = ["--s3_endpoint", cfg.lakefs.s3_endpoint, "--access_key", cfg.lakefs.access_key,
-                        "--secret_key", cfg.lakefs.secret_key, "--data_repository", cfg.lakefs.data_repository]
+                        "--secret_key", cfg.lakefs.secret_key, "--data_repository", cfg.lakefs.data_repository, "--branch", cfg.lakefs.branch]
     cache_arguments = ["--cache_path", cache_path_docker]
     print(cache_arguments)
-    command = docker_run_command + program_arguments + lakefs_arguments + lakefs_arguments + cache_arguments
+
+    command = docker_run_command + program_arguments + lakefs_arguments + cache_arguments
 
     # run the docker image
     run_docker(command)
@@ -372,6 +409,11 @@ if __name__ == "__main__":
     # get the cli commands
     cli_conf = OmegaConf.from_cli()
     cfg = OmegaConf.load(cli_conf.config)
+    cfg.datasplit.foldspath = os.path.expanduser(cfg.datasplit.foldspath)
+    cfg.mdgru.datapath = os.path.expanduser(cfg.mdgru.datapath)
+    cfg.mdgru.cache_path = os.path.expanduser(cfg.mdgru.cache_path)
+    cfg.run.cache_path = os.path.expanduser(cfg.run.cache_path)
+
     print("START MDGRU")
     docker_dispatcher = DockerDispatcher(cfg, cli_conf.config)
     docker_dispatcher.run()

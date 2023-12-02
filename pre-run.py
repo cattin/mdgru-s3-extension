@@ -1,4 +1,4 @@
-#!/bin/python
+#!/bin/python3
 #
 __author__ = "Robin Sandkuehler & Philippe Cattin"
 __copyright__ = "Copyright (C) 2022 Uni Basel"
@@ -76,9 +76,14 @@ def read_S3_Storage(cfg, featurefiles, maskfiles):
                     break
             # If True add it to the DataFrame
             if flag:
-                path,   file = os.path.split(key)
-                path,   Acq  = os.path.split(path)
-                branch, id   = os.path.split(path)
+#                path,   file = os.path.split(key)
+#                path,   Acq  = os.path.split(path)
+#                branch, id   = os.path.split(path)
+                path,    file = os.path.split(key)
+                path, folder  = os.path.split(path)
+                # get the patient ID and the Acq date from the folder name
+                id = folder.split("-")[1]
+                Acq = folder.split("-")[2]
                 # Append the dataset to the dataframe
                 newdata = pd.DataFrame(data = {'ID':[id] , 'AcqDate':[Acq] , 'file':[key]})
                 df = pd.concat([df, newdata], axis=0)
@@ -113,6 +118,7 @@ def run(cfg: DictConfig) -> None:
 
     # Get a list of unique patient IDs
     ids = df['ID'].unique()
+    print(ids)
 
     # Create the folder for the folds
     try:
@@ -135,8 +141,8 @@ def run(cfg: DictConfig) -> None:
 
         # Convert the split-% into number of datasets per split and round
         #   Ensure that we indeed then include all datasets by tuning the size of the testing dataset
-        num_train = int(round(len(ids)*cfg.datasplit.split[0]/100))
-        num_val   = int(round(len(ids)*cfg.datasplit.split[1]/100))
+        num_train = int(round(len(ids)*cfg.datasplit.split[0]/100.))
+        num_val   = int(round(len(ids)*cfg.datasplit.split[1]/100.))
 
         # Split the IDs in the required sizes
         train = ids[0:num_train]
@@ -151,12 +157,16 @@ def run(cfg: DictConfig) -> None:
                         featurefiles, maskfiles)
 
     # Also write out the dataframe itself for debugging
-    #df.to_csv('/tmp/df-%s.csv' %  bucket)
+    df.to_csv('/tmp/df-%s.csv' %  cfg.lakefs.data_repository)
 
 
 if __name__ == "__main__":
     cli_conf = OmegaConf.from_cli()
     cfg = OmegaConf.load(cli_conf.config)
+    cfg.datasplit.foldspath = os.path.expanduser(cfg.datasplit.foldspath)
+    cfg.mdgru.datapath = os.path.expanduser(cfg.mdgru.datapath)
+    cfg.mdgru.cache_path = os.path.expanduser(cfg.mdgru.cache_path)
+    cfg.run.cache_path = os.path.expanduser(cfg.run.cache_path)
 
     # Set the seed for the random generator (if available) otherwise it throws an error but continues
     try:

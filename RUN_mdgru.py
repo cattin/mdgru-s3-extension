@@ -33,7 +33,7 @@ def run_mdgru(args=None):
 
     # Parse arguments
     fullparameters = " ".join(args if args is not None else sys.argv)
-
+    print(fullparameters)
     parser = argparse.ArgumentParser(description="evaluate any data with given parameters", add_help=False)
 
     pre_parameter = parser.add_argument_group('Options changing parameter. Use together with --help')
@@ -42,9 +42,11 @@ def run_mdgru(args=None):
     pre_parameter.add_argument('--use_s3', action='store_true', help='storage backed to use for mdgru s3 or local')
     pre_parameter.add_argument('--nonthreaded', action="store_true",
                                      help="disallow threading during training to preload data before the processing")
-    pre_parameter.add_argument('--dice_loss_label', default=None, type=int, nargs="+", help='labels for which the dice losses shall be calculated')
-    pre_parameter.add_argument('--dice_loss_weight', default=None, type=float, nargs="+", help='weights for the dice losses of the individual classes. same size as dice_loss_label or scalar if dice_autoweighted. final loss: sum(dice_loss_weight)*diceloss + (1-sum(dice_loss_weight))*crossentropy')
-    pre_parameter.add_argument('--dice_autoweighted', action="store_true", help='weights the label Dices with the squared inverse gold standard area/volume; specify which labels with dice_loss_label; sum(dice_loss_weight) is used as a weighting between crossentropy and diceloss')
+    pre_parameter.add_argument('--dice_loss_weight', default=None, type=float, help='weight balancing the dice_loss vs the crossentropy_loss')
+    pre_parameter.add_argument('--crossentropy_loss_weight', default=None, type=float, help='weight balancing the crossentropy_loss vs the dice_loss')
+    pre_parameter.add_argument('--dice_label', default=None, type=int, nargs="+", help='labels for which the dice losses shall be calculated')
+    pre_parameter.add_argument('--dice_label_weight', default=None, type=float, nargs="+", help='weights for the dice losses of the individual classes. same size as dice_loss_label or scalar if dice_autoweighted. final loss: sum(dice_loss_weight)*diceloss + (1-sum(dice_loss_weight))*crossentropy')
+    pre_parameter.add_argument('--dice_label_autoweighted', action="store_true", help='weights the label Dices with the squared inverse gold standard area/volume; specify which labels with dice_loss_label; sum(dice_loss_weight) is used as a weighting between crossentropy and diceloss')
     pre_parameter.add_argument('--dice_generalized', action="store_true", help='total intersections of all labels over total sums of all labels, instead of linearly combined class Dices')
     pre_parameter.add_argument('--dice_cc', action='store_true', help='dice loss for binary segmentation per true component')
     pre_args, _ = parser.parse_known_args(args=args)
@@ -59,10 +61,11 @@ def run_mdgru(args=None):
             from mdgru.model_pytorch.mdgru_classification import MDGRUClassification as modelcls
         from mdgru.eval.torch import SupervisedEvaluationTorch as evalcls
     else:
-        if pre_args.dice_generalized:
-            from mdgru.model.mdgru_classification import c as modelcls
-        elif pre_args.dice_loss_label != None or pre_args.dice_autoweighted:
-            from mdgru.model.mdgru_classification import MDGRUClassificationWithDiceLoss as modelcls
+        if pre_args.dice_loss_weight != 0:
+            if pre_args.dice_generalized:
+                from mdgru.model.mdgru_classification import MDGRUClassificationWithGeneralizedDiceLoss as modelcls
+            else:
+                from mdgru.model.mdgru_classification import MDGRUClassificationWithDiceLoss as modelcls
         else:
             from mdgru.model.mdgru_classification import MDGRUClassification as modelcls
         from mdgru.eval.tf import SupervisedEvaluationTensorflow as evalcls
@@ -74,13 +77,14 @@ def run_mdgru(args=None):
     # use the S3 storage backend
     if pre_args.use_s3:
         tdc = ThreadedGridDataCollectionS3Storage
-
+#    print(parser.parse_args(args=args))
     define_arguments(modelcls, parser.add_argument_group('Model Parameters'))
+#    print(parser.parse_args(args=args))
     define_arguments(evalcls, parser.add_argument_group('Evaluation Parameters'))
     define_arguments(Runner, parser.add_argument_group('Runner Parameters'))
     define_arguments(tdc, parser.add_argument_group('Data Parameters'))
     args = parser.parse_args(args=args)
-    # print(args)
+    print(args)
 
     if args.help:
         parser.print_help()
@@ -107,9 +111,10 @@ def run_mdgru(args=None):
     args_eval['channels_first'] = args.use_pytorch
 
     #--- add dice loss options
-    args_eval['dice_loss_label'] = args.dice_loss_label
     args_eval['dice_loss_weight'] = args.dice_loss_weight
-    args_eval['dice_autoweighted'] = args.dice_autoweighted
+    args_eval['dice_label'] = args.dice_label
+    args_eval['dice_label_weight'] = args.dice_label_weight
+    args_eval['dice_label_autoweighted'] = args.dice_label_autoweighted
 
     # if args_tr is not None:
     #     traindc = tdc(**args_tr)
