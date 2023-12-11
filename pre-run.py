@@ -76,14 +76,14 @@ def read_S3_Storage(cfg, featurefiles, maskfiles):
                     break
             # If True add it to the DataFrame
             if flag:
-#                path,   file = os.path.split(key)
-#                path,   Acq  = os.path.split(path)
-#                branch, id   = os.path.split(path)
-                path,    file = os.path.split(key)
-                path, folder  = os.path.split(path)
+                path,   file = os.path.split(key)
+                path,   Acq  = os.path.split(path)
+                branch, id   = os.path.split(path)
+#                path,    file = os.path.split(key)
+#                path, folder  = os.path.split(path)
                 # get the patient ID and the Acq date from the folder name
-                id = folder.split("-")[1]
-                Acq = folder.split("-")[2]
+#                id = folder.split("-")[1]
+#                Acq = folder.split("-")[2]
                 # Append the dataset to the dataframe
                 newdata = pd.DataFrame(data = {'ID':[id] , 'AcqDate':[Acq] , 'file':[key]})
                 df = pd.concat([df, newdata], axis=0)
