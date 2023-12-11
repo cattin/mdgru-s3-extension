@@ -75,7 +75,7 @@ class MDGRUClassification(ClassificationModel, MDGRUNet):
             loss *= tf.size(ignore) / tf.reduce_sum(1 - ignore)
         if self.use_tensorboard:
             save_summary_for_nd_images("target", self.target, collections=["images"])
-            tf.summary.scalar("segloss", tf.reduce_mean(loss))
+            tf.summary.scalar("crossEntropy_loss", tf.reduce_mean(loss))
         return loss
 
     @lazy_property
@@ -108,18 +108,29 @@ class MDGRUClassification(ClassificationModel, MDGRUNet):
 class MDGRUClassificationWithDiceLoss(MDGRUClassification):
     def __init__(self, data, target, dropout, kw):
         super(MDGRUClassificationWithDiceLoss, self).__init__(data, target, dropout, kw)
-        self.dice_loss_label = argget(kw, "dice_loss_label", [])
-        self.dice_loss_weight = argget(kw, "dice_loss_weight", [])
-        self.dice_autoweighted = argget(kw, "dice_autoweighted", False)
+        self.crossentropy_loss_weight = argget(kw, "crossentropy_loss_weight", 0)
+        self.dice_loss_weight = argget(kw, "dice_loss_weight", 0)
+        self.dice_label = argget(kw, "dice_label", [])
+        self.dice_label_weight = argget(kw, "dice_label_weight", [])
+        self.dice_label_autoweighted = argget(kw, "dice_label_autoweighted", False)
 
         self.logger = logging.getLogger('runner.model')
         self.logger.debug('initialization MDGRUClassificationWithDiceLoss:')
-        self.logger.debug(f' self.dice_loss_label: {self.dice_loss_label}')
+        self.logger.debug(f' self.crossentropy_loss_weight: {self.crossentropy_loss_weight}')
         self.logger.debug(f' self.dice_loss_weight: {self.dice_loss_weight}')
-        self.logger.debug(f' self.dice_autoweighted: {self.dice_autoweighted}')
-        
-        if len(self.dice_loss_label) != len(self.dice_loss_weight) and not self.dice_autoweighted:
-            raise Exception("dice_loss_label and dice_loss_weight need to be of the same length")
+        self.logger.debug(f' self.dice_label: {self.dice_label}')
+        self.logger.debug(f' self.dice_label_weight: {self.dice_label_weight}')
+        self.logger.debug(f' self.dice_label_autoweighted: {self.dice_label_autoweighted}')
+
+        if len(self.dice_label) == 0:
+            raise Exception("To include the dice_loss at least one --dice_loss_label needs to be defined.")
+
+        if len(self.dice_label_weight) == 0 and not self.dice_label_autoweighted:
+            self.dice_autoweighted = True
+
+        if len(self.dice_label) != len(self.dice_label_weight) and not self.dice_label_autoweighted:
+            raise Exception("dice_loss_label and dice_loss_label_weight need to be of the same length.")
+
 
     @lazy_property
     def costs(self):
@@ -134,25 +145,27 @@ class MDGRUClassificationWithDiceLoss(MDGRUClassification):
 
         # calc soft dice loss, loop over all declared dice loss labels
         diceLoss = 0
-        if self.dice_autoweighted:
-            batchDiceLoss = tf.zeros([batch_size])
-            batchtotalWeight = tf.zeros([batch_size])
-            for l in self.dice_loss_label:
+
+        if self.dice_label_autoweighted:
+            batchDiceLoss = tf.zeros(len([batch_size]))
+            batchtotalWeight = tf.zeros(len([batch_size]))
+            for l in self.dice_label:
                 intersection =      tf.reduce_sum(self.prediction[..., l] * self.target[..., l], [i for i in range(1, ndim - 1)])
                 sum_prediction =    tf.reduce_sum(self.prediction[..., l], [i for i in range(1, ndim - 1)])
                 sum_target =        tf.reduce_sum(self.target[..., l], [i for i in range(1, ndim - 1)])
                 w_all_batches = 1 / (tf.square(sum_target) + 1) # to prevent infty if label is not in the sample
                 batchtotalWeight += w_all_batches
                 batchDiceLoss += w_all_batches * (2 * intersection + eps) / (sum_prediction + sum_target + eps)
-            diceLoss = - sum(self.dice_loss_weight) * tf.reduce_mean(batchDiceLoss / batchtotalWeight)
-        elif sum(self.dice_loss_weight) > 0:
-            for w, l in zip(self.dice_loss_weight, self.dice_loss_label):
+            diceLoss = -tf.reduce_mean(batchDiceLoss / batchtotalWeight)
+        elif sum(self.dice_label_weight) > 0:
+            for w, l in zip(self.dice_label_weight, self.dice_label):
                 intersection =      tf.reduce_sum(self.prediction[..., l] * self.target[..., l], [i for i in range(1, ndim - 1)])
-                sum_prediction =    tf.reduce_sum(self.target[..., l], [i for i in range(1, ndim - 1)])
-                sum_target =        tf.reduce_sum(self.prediction[..., l], [i for i in range(1, ndim - 1)])
+                sum_prediction =    tf.reduce_sum(self.prediction[..., l], [i for i in range(1, ndim - 1)])
+                sum_target =        tf.reduce_sum(self.target[..., l], [i for i in range(1, ndim - 1)])
                 diceLoss -= w * tf.reduce_mean((2 * intersection + eps) / (sum_prediction + sum_target + eps))
 
-        return diceLoss + (1 - sum(self.dice_loss_weight)) * crossEntropyLoss
+        tf.summary.scalar("dice_loss", diceLoss)
+        return self.dice_loss_weight*diceLoss + self.crossentropy_loss_weight * crossEntropyLoss
 
 
 class MDGRUClassificationWithGeneralizedDiceLoss(MDGRUClassification):

@@ -14,8 +14,8 @@ class DataCollection(object):
     '''Abstract class for all data handling classes. 
 
     '''
-    _defaults = {'seed': {'help': 'Seed to be used for deterministic random sampling, given no threading is used', 'value': 1234},
-                 'nclasses': None,
+    _defaults = {'seed': {'help': 'Seed to be used for deterministic random sampling, given no threading is used', 'value': 12345},
+            'nclasses': None,
                  }
 
     def __init__(self, kw):

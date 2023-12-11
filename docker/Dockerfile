@@ -11,6 +11,8 @@ COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
 ENV PYTHONUNBUFFERED=1
+ENV SSL_CERT_FILE=/app/docker/CAs/dbe-object-storage-ca.crt
+ENV AWS_CA_BUNDLE=/app/docker/CAs/dbe-object-storage-ca.crt
 WORKDIR  /app
 
 ENTRYPOINT ["python3", "RUN_mdgru.py"]

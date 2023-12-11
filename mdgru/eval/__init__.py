@@ -7,6 +7,7 @@ import os
 import pickle
 import time
 from abc import abstractmethod
+from typing import Union, Any, Dict
 
 import numpy as np
 
@@ -100,7 +101,18 @@ class SupervisedEvaluation(object):
         kwcopy['nclasses'] = self.output_dims
         kwcopy['batch_size'] = self.batch_size
         self.trdc = datacls(*paramstraining, kw=copy.copy(kwcopy))
-        testkw = copy.copy(kwcopy)
+        testkw: Union[Dict[Any, Any], Any] = copy.copy(kwcopy)
+        # I - PhC - introduced this change such that in the valudation and testing set no additional
+        # data augmentation is performed. Are these all the important augmentation parameters?
+        # With this change the reported validation DICE coefficients during training seemed correct
+        testkw['scaling'] = [1., 1., 1.]
+        testkw['mirror'] = [0, 0, 0]
+        testkw['gaussiannoise'] = False
+        for i in range(len(testkw['deform'])):
+            testkw['deform'][i] = 0
+            testkw['deformSigma'][i] = 0
+        # PhC End
+
         testkw['batch_size'] = testkw['batch_size'] if not self.testbatchsize else self.testbatchsize
         valkw = copy.copy(testkw)
         testkw['ignore_missing_mask'] = True

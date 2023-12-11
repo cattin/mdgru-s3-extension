@@ -50,7 +50,7 @@ class GridDataCollection(DataCollection):
                         'help': 'Given a deformation grid spacing, this determines the standard deviations for each dimension of the random deformation vectors.',
                         'type': float},
         'mirror': {'value': [0], 'help': 'Activate random mirroring along the specified axes during training',
-                   'type': bool},
+                   'type': int},
         'gaussiannoise': {'value': False,
                           'help': 'Random multiplicative Gaussian noise on the input data with given std and mean 1'},
         'scaling': {'value': [0],
@@ -449,7 +449,9 @@ class GridDataCollection(DataCollection):
             featurefiles = self.featurefiles
         if maskfiles is None:
             maskfiles = self.maskfiles
+        
         features = [self.load(os.path.join(folder, i), lazy=self.lazy).squeeze() for i in featurefiles]
+        
         if len(self.subtractGaussSigma):
             if self.nooriginal:
                 print("nooriginal")
@@ -979,6 +981,7 @@ class ThreadedGridDataCollectionS3Storage(GridDataCollection):
                  'cache_path': {'help': 'Path to the local cache', 'value': '', 'type': str},
                  'num_threads': {'help': 'Determines how many threads are used to prefetch data, such that io operations do not cause delay.',
                                  'value': 5, 'type': int},
+                 'branch': {'help': 'The branch of the S3 storage', 'value': '', 'type': str},
                  'batch_size': 1
                  }
 
@@ -1008,9 +1011,7 @@ class ThreadedGridDataCollectionS3Storage(GridDataCollection):
         self.access_key = ""
         self.secret_key = ""
         self.s3_clients = []
-
-
-        # self.numoffeatures = len(self.featurefiles)
+        self.branch = ""
 
         data_kw, kw = compile_arguments(ThreadedGridDataCollectionS3Storage, kw, transitive=False)
         for k, v in data_kw.items():
@@ -1032,12 +1033,19 @@ class ThreadedGridDataCollectionS3Storage(GridDataCollection):
         with open(location) as f:
             self.s3_files = json.load(f)
         self.data_folders_s3 = list(self.s3_files.keys())
-        self.tps = [os.path.join(self.cache_path, s) for s in self.data_folders_s3]
-
+        self.tps = [os.path.join(self.cache_path, self.branch, s) for s in self.data_folders_s3]
+       
+        if not self.tps:
+            raise Exception("json file " + location + " is empty!")
+            exit(-1)
+        
         self.feature_prefix = [s.split(".")[0] for s in self.featurefiles]
         self.mask_prefix = [s.split(".")[0] for s in self.maskfiles]
+        
+        # need to overwrite it here as it might not be set correct in the super class due to the dummy class
+        self.numoffeatures = argget(kw, 'numoffeatures', len(self._get_features_and_masks(self.tps[0])[0]))
 
-        # self.batch_size = argget(kw, 'batchsize', 1)
+
         self.curr_thread = 0
         self._batch = [None for _ in range(self.num_threads)]
         self._batchlabs = [None for _ in range(self.num_threads)]
@@ -1045,9 +1053,6 @@ class ThreadedGridDataCollectionS3Storage(GridDataCollection):
                                     range(self.num_threads)]
         for t in self._preloadthreads:
             t.start()
-
-        # need to overwrite it here as it might not be set correct in the super class due to the dummy class
-        self.numoffeatures = argget(kw, 'numoffeatures', len(self._get_features_and_masks(self.tps[0])[0]))
 
     @staticmethod
     def dummy():
@@ -1127,64 +1132,8 @@ class ThreadedGridDataCollectionS3Storage(GridDataCollection):
         self._batch[container_id], self._batchlabs[container_id] = super(ThreadedGridDataCollectionS3Storage,
                                                                          self).random_sample(batch_size=batchsize)
 
-    # def _preload_random_sample(self, batchsize, container_id):
-    #
-    #     current_folder_idx = list(self.randomstate.randint(0, len(self.tps), batchsize))
-    #
-    #     batch = []
-    #     batch_labels = []
-    #     for idx, folder_idx in enumerate(current_folder_idx):
-    #         # load the corresponding files from the s3 if needed
-    #         folder_name = self.data_folders_s3[folder_idx]
-    #         feature_names = self.s3_files[folder_name]["features"]
-    #         mask_names = self.s3_files[folder_name]["labels"]
-    #
-    #         if not os.path.isdir(os.path.join(self.cache_path, folder_name)):
-    #             os.makedirs(os.path.join(self.cache_path, folder_name))
-    #
-    #         if len(feature_names) != len(self.featurefiles):
-    #             print("error")
-    #
-    #         if len(mask_names) != len(self.maskfiles):
-    #             print("error")
-    #
-    #         # reade all the feature files
-    #         for idx, feature_name in enumerate(self.feature_prefix):
-    #             s3_filename = [match for match in feature_names if feature_name in match][0]
-    #             cache_filename = os.path.join(self.cache_path, folder_name, self.featurefiles[idx])
-    #             self.load_file_s3(container_id, s3_filename, cache_filename)
-    #
-    #         # read all the mask files
-    #         for idx, mask_name in enumerate(self.mask_prefix):
-    #             s3_filename = [match for match in mask_names if mask_name in match][0]
-    #             cache_filename = os.path.join(self.cache_path, folder_name, self.maskfiles[idx])
-    #             self.load_file_s3(container_id, s3_filename, cache_filename)
-    #
-    #         image, labels = super(ThreadedGridDataCollectionS3Storage, self).random_sample(batch_size=1, tp=folder_idx)
-    #
-    #         batch.append(image[0])
-    #         batch_labels.append(labels[0])
-    #
-    #     batch = np.asarray(batch)
-    #     labels = np.asarray(batch_labels)
-    #
-    #     self._batch[container_id] = batch
-    #     self._batchlabs[container_id] = labels
-
-    # def load_file_s3(self, container_id, s3_filename, cache_filename):
-    #
-    #     if not os.path.isfile(cache_filename):
-    #         print("Cache Miss: Download file from S3")
-    #         s3 = self.s3_clients[container_id]
-    #         cache_filename_tmp = cache_filename + "." + str(self.randomstate.randint(100000, 999999))
-    #         s3.download_file(self.data_repository, s3_filename, cache_filename_tmp)
-    #         os.rename(cache_filename_tmp, cache_filename)
-    #     else:
-    #         print("Cache Hit")
-    #     print(s3_filename, cache_filename)
 
     def load(self, file, lazy=False):
-
         filename_base = os.path.dirname(file)
         file_type = os.path.basename(file).split(".")[0]
 

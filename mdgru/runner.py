@@ -140,6 +140,7 @@ class Runner(object):
             logging.getLogger('runner').info('args runner {}:{}'.format(k, self.origargs[k]))
         self.ev = evaluationinstance
         for k in self.ev.origargs:
+            print(k, self.ev.origargs[k])
             logging.getLogger('runner').info('args eval/data/model {}:{}'.format(k, self.ev.origargs[k]))
         # for k in self.ev.trdc.origargs:
         #     logging.getLogger('data').info(' trdc arg {}:{}'.format(k, self.ev.trdc.origargs[k]))
