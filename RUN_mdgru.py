@@ -33,7 +33,7 @@ def run_mdgru(args=None):
 
     # Parse arguments
     fullparameters = " ".join(args if args is not None else sys.argv)
-    print(fullparameters)
+    print(">"+fullparameters+"<")
     parser = argparse.ArgumentParser(description="evaluate any data with given parameters", add_help=False)
 
     pre_parameter = parser.add_argument_group('Options changing parameter. Use together with --help')

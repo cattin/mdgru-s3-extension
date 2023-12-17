@@ -1,6 +1,7 @@
 #!/bin/python3
 
 import os
+import sys
 import stat
 import time
 from datetime import datetime
@@ -305,7 +306,7 @@ def build_docker_image(cfg) -> None:
     print("\033[2A")
     # print("\033[J")
 
-
+q
 def run_docker(command):
     # print("START DOCKER CONTAINER")
     final_command = " ".join(command)
@@ -413,6 +414,9 @@ if __name__ == "__main__":
     cfg.mdgru.datapath = os.path.expanduser(cfg.mdgru.datapath)
     cfg.mdgru.cache_path = os.path.expanduser(cfg.mdgru.cache_path)
     cfg.run.cache_path = os.path.expanduser(cfg.run.cache_path)
+
+    # Process the additional argv-config parameters
+
 
     print("START MDGRU")
     docker_dispatcher = DockerDispatcher(cfg, cli_conf.config)
