@@ -229,11 +229,13 @@ class GridDataCollection(DataCollection):
                         vol = ni.open_image(file, verbose=False)
                         self.affine = vol.get_aligned_transformation("RAS")
                         data = vol.aligned_volume
+                        # If there are more labels than classes in the volume, then set it to the max class label (foreground)
                     else:
                         f = nib.load(file)
                         self.affine = f.affine
                         self.pixdim = np.asarray(f.header['pixdim'][1:])
                         data = f.get_data()
+                        data[data >= self.nclasses] = self.nclasses - 1
                     return data
                 elif ending in ['.nrrd', '.nhdr']:
                     if self.correct_orientation:
