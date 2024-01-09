@@ -306,7 +306,6 @@ def build_docker_image(cfg) -> None:
     print("\033[2A")
     # print("\033[J")
 
-q
 def run_docker(command):
     # print("START DOCKER CONTAINER")
     final_command = " ".join(command)

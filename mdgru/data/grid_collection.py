@@ -234,8 +234,12 @@ class GridDataCollection(DataCollection):
                         f = nib.load(file)
                         self.affine = f.affine
                         self.pixdim = np.asarray(f.header['pixdim'][1:])
-                        data = f.get_data()
-                        data[data >= self.nclasses] = self.nclasses - 1
+                        # I added the .astype('int16')
+                        data = f.get_data().astype('int16')
+                        # In case this is a maskfile, make sure that the maximum label is not higher than the
+                        # number of labels given by the option '-mclasses'
+                        if file.split("/")[-1] in self.maskfiles:
+                            data[data >= self.nclasses] = self.nclasses - 1
                     return data
                 elif ending in ['.nrrd', '.nhdr']:
                     if self.correct_orientation:
